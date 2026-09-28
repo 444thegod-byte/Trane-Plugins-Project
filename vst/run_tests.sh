@@ -58,6 +58,13 @@ NINJA="$(find_tool ninja)" || die "找不到 ninja。
   装法：  brew install ninja
   或指定： PATH=\"\$PATH:/path/to/ninja/bin\" ./run_tests.sh"
 
+# 把找到的工具所在目录加进 PATH。**这一步不能省**：
+# JUCE 生成 VST3 manifest helper 时会另起一个 cmake 子进程去配置辅助工程，
+# 那个子进程不继承外层的 -DCMAKE_MAKE_PROGRAM，只会去 PATH 上找 ninja。
+# ninja 不在 PATH 上就会报 "CMake was unable to find a build program
+# corresponding to Ninja"，而且报错出现在子进程里，很不好查。
+export PATH="$(dirname "$CMAKE"):$(dirname "$NINJA"):$PATH"
+
 xcode-select -p >/dev/null 2>&1 \
   || die "找不到 Xcode 命令行工具。
   装法：  xcode-select --install"
