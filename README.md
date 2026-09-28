@@ -74,9 +74,9 @@ Max/MSP 依赖 iLok + Java，**无法在自动化环境启动**，只能静态�
 
 ### 环境要求
 
-- macOS + Xcode Command Line Tools
+- macOS + Xcode 命令行工具（`xcode-select --install`）
 - CMake ≥ 3.22、Ninja
-- Python 3.13 + `numpy`、`soundfile`
+- Python 3，且装了 `numpy` 与 `soundfile`
 
 ### 步骤
 
@@ -90,12 +90,19 @@ cd Trane-Plugins-Project/vst
 ./run_tests.sh --quick   # 只跑测试，跳过构建
 ```
 
-`run_tests.sh` 里的 Python 路径与 PATH 是按开发机写死的，**换机器要改成本机实际路径**：
+`run_tests.sh` 会**自动探测** Python / cmake / ninja，换机器不用改文件。
+探测 Python 时会真的去 `import numpy, soundfile` 试一次 —— 只看版本号不够，
+有些 Python 装好了但没装这两个库，按版本挑会挑中它然后在测试阶段才炸。
+要强制指定某个解释器，用环境变量：
 
 ```bash
-PY=/Users/.../python
-export PATH="/Users/.../bin:$PATH"
+TRANE_PY=/path/to/python3 ./run_tests.sh
 ```
+
+依赖缺失时脚本会直接报出缺什么、怎么装，不会跑到一半才失败。
+
+> **注意**：构建的后处理步骤会把插件装到 `~/Library/Audio/Plug-Ins/{VST3,Components}/`，
+> 覆盖本机已安装的同名插件。所以在任何克隆目录里构建，都会影响你当前装着的那个。
 
 ### 验收门槛
 

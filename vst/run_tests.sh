@@ -6,18 +6,78 @@
 #
 # 这个脚本存在的意义：Max for Live 那条路我无法在本机运行，只能靠人肉测试；
 # 这里每一条验证都是机器可复现的。
+#
+# 换机器**不需要改这个文件** —— Python / cmake / ninja 全部自动探测。
+# 要强制指定 Python，设环境变量即可：
+#   TRANE_PY=/usr/local/bin/python3 ./run_tests.sh
 set -euo pipefail
 
 cd "$(dirname "$0")"
 
-PY=/Users/444_thegod/.workbuddy-ai/binaries/python/envs/default/bin/python
-export PATH="/Users/444_thegod/.workbuddy-ai/binaries/python/envs/default/bin:$PATH"
+die() { echo >&2; echo "错误：$*" >&2; exit 1; }
+
+# ---- 探测 Python ----
+# 必须**真的能 import** numpy 和 soundfile，只看版本号不够：
+# 本机的托管版 python3.13 就没装这两个库，按版本挑会挑中它，
+# 然后一路跑到 pytest 阶段才炸，报错还看不出是解释器选错了。
+find_python() {
+  local c
+  for c in "${TRANE_PY:-}" \
+           "$HOME/.workbuddy-ai/binaries/python/envs/default/bin/python" \
+           /usr/bin/python3 \
+           python3; do
+    [ -n "$c" ] || continue
+    if command -v "$c" >/dev/null 2>&1 \
+       && "$c" -c 'import numpy, soundfile' >/dev/null 2>&1; then
+      command -v "$c"
+      return 0
+    fi
+  done
+  return 1
+}
+
+PY="$(find_python)" || die "找不到带 numpy 和 soundfile 的 Python 3。
+  装依赖：  python3 -m pip install numpy soundfile
+  或指定：  TRANE_PY=/path/to/python3 ./run_tests.sh"
+
+PYDIR="$(dirname "$PY")"
+
+# ---- 探测 cmake / ninja ----
+# 这两个可能装在别处不在 PATH 上（本机就是装在 Python venv 里），
+# 所以顺带在 Python 同目录看一眼。
+find_tool() {
+  if command -v "$1" >/dev/null 2>&1; then command -v "$1"; return 0; fi
+  if [ -x "$PYDIR/$1" ]; then echo "$PYDIR/$1"; return 0; fi
+  return 1
+}
+
+CMAKE="$(find_tool cmake)" || die "找不到 cmake。
+  装法：  brew install cmake
+  或指定： PATH=\"\$PATH:/path/to/cmake/bin\" ./run_tests.sh"
+NINJA="$(find_tool ninja)" || die "找不到 ninja。
+  装法：  brew install ninja
+  或指定： PATH=\"\$PATH:/path/to/ninja/bin\" ./run_tests.sh"
+
+xcode-select -p >/dev/null 2>&1 \
+  || die "找不到 Xcode 命令行工具。
+  装法：  xcode-select --install"
+
+[ -d external/JUCE/modules ] \
+  || die "缺少 JUCE。先跑：./setup_juce.sh"
+
+echo "Python : $PY"
+echo "         $("$PY" -V 2>&1)"
+echo "cmake  : $CMAKE  [$("$CMAKE" --version | head -1)]"
+echo "ninja  : $NINJA  [v$("$NINJA" --version)]"
+echo
 
 if [ "${1:-}" != "--quick" ]; then
   echo "=== 配置 ==="
-  cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release >/dev/null
+  # 显式把 ninja 路径交给 cmake —— 它不在 PATH 上的话，cmake 自己找不到。
+  "$CMAKE" -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_MAKE_PROGRAM="$NINJA" >/dev/null
   echo "=== 构建 ==="
-  cmake --build build
+  "$CMAKE" --build build
 fi
 
 echo
