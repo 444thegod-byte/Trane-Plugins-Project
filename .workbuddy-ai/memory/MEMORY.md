@@ -17,6 +17,17 @@
 - **先量，再改。** 他说"不对/没效果"时不要猜，去采样、去复现、去量出事实。
 - 所有阈值都要有实测依据，不能拍脑袋。断言注释里写实测值。
 
+## 仓库（2026-09-28 建立）
+`https://github.com/444thegod-byte/Trane-Plugins-Project`（**私有**，账号 `444thegod-byte`）。
+仓库名去掉了变音符与空格——GitHub 不允许，`Träne` 的正确写法保留在 description 与 README 标题。
+- **JUCE 不进仓库**：用 `vst/setup_juce.sh` 按精确 commit 拉（9.0.2 @ `7278278`）。
+  锁 commit 不锁 tag，因为 **tag 可以被移动**；拉到后校验不符即报错退出。
+- 不进仓库的还有：`vst/build/`、`vst/.pytest_tmp/`、`outputs/*.wav`、`outputs/*.zip`、`outputs/*/`。
+- **这台机器上 GitHub 官方集成没有建仓权限**（403）。要用 `/tmp` 下的 gh 单文件发行版，
+  且 `brew install gh` 会被沙箱拦。工具路径与推送命令见 `2026-09-28.md`。
+- **推送后必须核对**：比对提交哈希 + 逐文件 blob 哈希 + 二进制独立 sha256。
+  光看 `git push` 成功不够。
+
 ## VST3 工程（`vst/`）
 - 三层：`core/`（DSP，**不依赖 JUCE**，可独立编译与离线渲染）→ `probe/`（离线测量台）
   → `plugin/`（JUCE 外壳，薄）。
