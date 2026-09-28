@@ -1,0 +1,55 @@
+<svg viewBox="0 0 680 220" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" font-family="ui-sans-serif,-apple-system,Helvetica,Arial,sans-serif">
+<title>Träne 设备面板布局（650 × 169 像素）</title>
+<desc>Max for Live 音频效果器面板，由 src/Trane.maxpat 的 Presentation View 自动渲染。</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
+<rect x="41" y="45" width="598.0" height="155.5" rx="6" fill="#232322" stroke="#B4B2A9" stroke-opacity="0.3" stroke-width="1"/>
+<g transform="translate(41,45) scale(0.92)">
+<text x="8.0" y="12.0" font-size="12" font-weight="500" fill="#D3D1C7">Träne  ·  granular freeze · grain · audio arp · huge space</text>
+<text x="8.0" y="24.0" font-size="12" font-weight="500" fill="#5DCAA5">CAPTURE</text>
+<text x="104.0" y="24.0" font-size="12" font-weight="500" fill="#5DCAA5">GRAIN</text>
+<text x="440.0" y="24.0" font-size="12" font-weight="500" fill="#5DCAA5">ARP</text>
+<rect x="8.0" y="27.0" width="22.0" height="22.0" rx="4" fill="#2C2C2A" stroke="#B4B2A9" stroke-opacity="0.45" stroke-width="1"/><circle cx="19.0" cy="38.0" r="3.5" fill="#5F5E5A"/>
+<rect x="104.0" y="27.0" width="22.0" height="22.0" rx="4" fill="#2C2C2A" stroke="#B4B2A9" stroke-opacity="0.45" stroke-width="1"/><circle cx="115.0" cy="38.0" r="3.5" fill="#5F5E5A"/>
+<rect x="200.0" y="27.0" width="90.0" height="22.0" rx="4" fill="#2C2C2A" stroke="#B4B2A9" stroke-opacity="0.45" stroke-width="1"/>
+<rect x="201.5" y="28.5" width="43.5" height="19.0" rx="3" fill="#1D9E75"/>
+<text x="223.2" y="38.0" font-size="12" text-anchor="middle" dominant-baseline="central" fill="#E1F5EE">Clear</text>
+<text x="266.8" y="38.0" font-size="12" text-anchor="middle" dominant-baseline="central" fill="#B4B2A9">Ruin</text>
+<rect x="350.0" y="27.0" width="22.0" height="22.0" rx="4" fill="#2C2C2A" stroke="#B4B2A9" stroke-opacity="0.45" stroke-width="1"/><circle cx="361.0" cy="38.0" r="3.5" fill="#5F5E5A"/>
+<rect x="440.0" y="27.0" width="22.0" height="22.0" rx="4" fill="#2C2C2A" stroke="#B4B2A9" stroke-opacity="0.45" stroke-width="1"/><circle cx="451.0" cy="38.0" r="3.5" fill="#5F5E5A"/>
+<rect x="506.0" y="27.0" width="78.0" height="22.0" rx="4" fill="#2C2C2A" stroke="#B4B2A9" stroke-opacity="0.45" stroke-width="1"/><text x="514.0" y="38.0" font-size="12" dominant-baseline="central" fill="#D3D1C7">1/16</text><path d="M569 36 L574 40 L578 36" fill="none" stroke="#888780" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="33.0" y="41.0" font-size="12" font-weight="500" fill="#5DCAA5">FREEZE</text>
+<text x="129.0" y="41.0" font-size="12" font-weight="500" fill="#5DCAA5">REVERSE</text>
+<text x="293.0" y="41.0" font-size="12" font-weight="500" fill="#5DCAA5">MODE</text>
+<text x="375.0" y="41.0" font-size="12" font-weight="500" fill="#5DCAA5">GRAIN</text>
+<text x="466.0" y="41.0" font-size="12" font-weight="500" fill="#5DCAA5">ARP</text>
+<text x="588.0" y="41.0" font-size="12" font-weight="500" fill="#5DCAA5">RATE</text>
+<circle cx="27.0" cy="71.0" r="19.0" fill="#444441" stroke="#B4B2A9" stroke-opacity="0.5" stroke-width="1"/><line x1="27.0" y1="71.0" x2="13.98" y2="69.44" stroke="#D3D1C7" stroke-width="1.8" stroke-linecap="round"/>
+<circle cx="123.0" cy="71.0" r="19.0" fill="#444441" stroke="#B4B2A9" stroke-opacity="0.5" stroke-width="1"/><line x1="123.0" y1="71.0" x2="109.98" y2="69.44" stroke="#D3D1C7" stroke-width="1.8" stroke-linecap="round"/>
+<circle cx="171.0" cy="71.0" r="19.0" fill="#444441" stroke="#B4B2A9" stroke-opacity="0.5" stroke-width="1"/><line x1="171.0" y1="71.0" x2="163.38" y2="60.33" stroke="#D3D1C7" stroke-width="1.8" stroke-linecap="round"/>
+<circle cx="219.0" cy="71.0" r="19.0" fill="#444441" stroke="#B4B2A9" stroke-opacity="0.5" stroke-width="1"/><line x1="219.0" y1="71.0" x2="209.73" y2="80.27" stroke="#D3D1C7" stroke-width="1.8" stroke-linecap="round"/>
+<circle cx="267.0" cy="71.0" r="19.0" fill="#444441" stroke="#B4B2A9" stroke-opacity="0.5" stroke-width="1"/><line x1="267.0" y1="71.0" x2="254.53" y2="75.05" stroke="#D3D1C7" stroke-width="1.8" stroke-linecap="round"/>
+<circle cx="315.0" cy="71.0" r="19.0" fill="#444441" stroke="#B4B2A9" stroke-opacity="0.5" stroke-width="1"/><line x1="315.0" y1="71.0" x2="305.73" y2="61.73" stroke="#D3D1C7" stroke-width="1.8" stroke-linecap="round"/>
+<circle cx="525.0" cy="71.0" r="19.0" fill="#444441" stroke="#B4B2A9" stroke-opacity="0.5" stroke-width="1"/><line x1="525.0" y1="71.0" x2="534.27" y2="80.27" stroke="#D3D1C7" stroke-width="1.8" stroke-linecap="round"/>
+<circle cx="573.0" cy="71.0" r="19.0" fill="#444441" stroke="#B4B2A9" stroke-opacity="0.5" stroke-width="1"/><line x1="573.0" y1="71.0" x2="570.95" y2="58.05" stroke="#D3D1C7" stroke-width="1.8" stroke-linecap="round"/>
+<text x="8.0" y="100.0" font-size="12" font-weight="500" fill="#B4B2A9">LOOP ms</text>
+<text x="104.0" y="100.0" font-size="12" font-weight="500" fill="#5DCAA5">SIZE</text>
+<text x="152.0" y="100.0" font-size="12" font-weight="500" fill="#5DCAA5">DENSITY</text>
+<text x="200.0" y="100.0" font-size="12" font-weight="500" fill="#5DCAA5">POSITION</text>
+<text x="248.0" y="100.0" font-size="12" font-weight="500" fill="#5DCAA5">SPRAY</text>
+<text x="296.0" y="100.0" font-size="12" font-weight="500" fill="#5DCAA5">RATE</text>
+<text x="506.0" y="100.0" font-size="12" font-weight="500" fill="#5DCAA5">PROB</text>
+<text x="554.0" y="100.0" font-size="12" font-weight="500" fill="#5DCAA5">STEPS</text>
+<text x="8.0" y="113.0" font-size="12" font-weight="500" fill="#B4B2A9">HUGE SPACE</text>
+<text x="122.0" y="113.0" font-size="12" font-weight="500" fill="#B4B2A9">8s+ feedback plate</text>
+<circle cx="27.0" cy="135.0" r="19.0" fill="#444441" stroke="#B4B2A9" stroke-opacity="0.5" stroke-width="1"/><line x1="27.0" y1="135.0" x2="30.06" y2="122.25" stroke="#D3D1C7" stroke-width="1.8" stroke-linecap="round"/>
+<circle cx="95.0" cy="135.0" r="19.0" fill="#444441" stroke="#B4B2A9" stroke-opacity="0.5" stroke-width="1"/><line x1="95.0" y1="135.0" x2="105.61" y2="127.29" stroke="#D3D1C7" stroke-width="1.8" stroke-linecap="round"/>
+<circle cx="163.0" cy="135.0" r="19.0" fill="#444441" stroke="#B4B2A9" stroke-opacity="0.5" stroke-width="1"/><line x1="163.0" y1="135.0" x2="175.95" y2="132.95" stroke="#D3D1C7" stroke-width="1.8" stroke-linecap="round"/>
+<circle cx="231.0" cy="135.0" r="19.0" fill="#444441" stroke="#B4B2A9" stroke-opacity="0.5" stroke-width="1"/><line x1="231.0" y1="135.0" x2="225.05" y2="123.32" stroke="#D3D1C7" stroke-width="1.8" stroke-linecap="round"/>
+<circle cx="299.0" cy="135.0" r="19.0" fill="#444441" stroke="#B4B2A9" stroke-opacity="0.5" stroke-width="1"/><line x1="299.0" y1="135.0" x2="309.61" y2="127.29" stroke="#D3D1C7" stroke-width="1.8" stroke-linecap="round"/>
+<text x="8.0" y="164.0" font-size="12" font-weight="500" fill="#5DCAA5">MIX</text>
+<text x="76.0" y="164.0" font-size="12" font-weight="500" fill="#5DCAA5">SPACE</text>
+<text x="144.0" y="164.0" font-size="12" font-weight="500" fill="#5DCAA5">TAIL</text>
+<text x="212.0" y="164.0" font-size="12" font-weight="500" fill="#5DCAA5">DAMP</text>
+<text x="280.0" y="164.0" font-size="12" font-weight="500" fill="#5DCAA5">DIFFUSE</text>
+</g>
+</svg>
