@@ -133,6 +133,23 @@ int main(int argc, char** argv) {
         }
     }
 
+    auto stereoLayout = inst->getBusesLayout();
+    stereoLayout.inputBuses.set(0, juce::AudioChannelSet::stereo());
+    stereoLayout.outputBuses.set(0, juce::AudioChannelSet::stereo());
+    if (!inst->setBusesLayout(stereoLayout)) {
+        std::fprintf(stderr, "错误: 插件拒绝双声道布局\n");
+        return 1;
+    }
+    for (const auto& channels : {juce::AudioChannelSet::mono(), juce::AudioChannelSet::create5point1()}) {
+        auto unsupported = stereoLayout;
+        unsupported.inputBuses.set(0, channels);
+        unsupported.outputBuses.set(0, channels);
+        if (inst->checkBusesLayoutSupported(unsupported)) {
+            std::fprintf(stderr, "错误: 插件宣称支持未实现的 %d 声道布局\n", channels.size());
+            return 1;
+        }
+    }
+    std::printf("声道布局   : 双声道通过，单声道和 5.1 正确拒绝\n");
     inst->setPlayConfigDetails(2, 2, kSr, kBlock);
     inst->prepareToPlay(kSr, kBlock);
 

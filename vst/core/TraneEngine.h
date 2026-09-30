@@ -110,6 +110,8 @@ public:
     static constexpr double kLiveGrainWindowSeconds = 4.0;
 
 private:
+    void processChunk(const float* const* in, float* const* out, int numSamples);
+
     CaptureBuffer capture_;
     FreezeLoop freeze_;
     GrainCloud grain_;

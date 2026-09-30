@@ -34,7 +34,7 @@ find_python() {
            python3; do
     [ -n "$c" ] || continue
     if command -v "$c" >/dev/null 2>&1 \
-       && "$c" -c 'import numpy, soundfile, fontTools' >/dev/null 2>&1; then
+       && "$c" -c 'import pytest, numpy, soundfile, fontTools, PIL' >/dev/null 2>&1; then
       command -v "$c"
       return 0
     fi
@@ -42,8 +42,8 @@ find_python() {
   return 1
 }
 
-PY="$(find_python)" || die "找不到带 numpy、soundfile 和 fontTools 的 Python 3。
-  装依赖：  python3 -m pip install numpy soundfile fonttools
+PY="$(find_python)" || die "找不到带 pytest、numpy、soundfile、fontTools 和 pillow 的 Python 3。
+  装依赖：  python3 -m pip install pytest numpy soundfile fonttools pillow
   或指定：  TRANE_PY=/path/to/python3 ./run_tests.sh"
 
 PYDIR="$(dirname "$PY")"
@@ -95,11 +95,14 @@ fi
 
 echo
 echo "=== 离线渲染验证 ==="
+"$CMAKE" --build build --target engine_block_test
+ctest --test-dir build --output-on-failure
 # pytest 会先删掉已存在的 --basetemp 目录。在沙箱下这个删除动作会被拦下，
 # 于是全部测试在 setup 阶段集体报 ERROR —— 看起来像代码崩了，其实是环境问题。
 # 所以每次开一个全新的 /tmp 目录：既躲开删除动作，也符合"测试只写 /tmp"的约定。
 PYTEST_TMP="$(mktemp -d /tmp/trane_pytest.XXXXXX)"
-"$PY" -m pytest tests/ -q --basetemp="$PYTEST_TMP" -p no:cacheprovider
+"$PY" -m pytest tests/ -q --basetemp="$PYTEST_TMP" -p no:cacheprovider \
+  --junitxml="${TRANE_TEST_ARTIFACTS:-$PYTEST_TMP}/pytest.xml"
 
 echo
 echo "=== 面板渲染 + 像素分析 ==="
@@ -114,7 +117,7 @@ echo "=== 面板渲染 + 像素分析 ==="
 # 留着一条永远为真的"版面切换"断言，读报告的人会以为它还管着什么。
 PANEL_PROBE=build/panel_probe_artefacts/Release/panel_probe
 [ -x "$PANEL_PROBE" ] || die "找不到 $PANEL_PROBE —— panel_probe 没被构建"
-"$PY" tools/check_panel_render.py --outdir ../outputs
+"$PY" tools/check_panel_render.py --outdir "${TRANE_TEST_ARTIFACTS:-../outputs}"
 
 # 下面五个脚本都是"改坏源码 → 重编 → 跑检查器 → 还原"的反向对照。
 #
@@ -235,7 +238,7 @@ echo "=== 端到端验收（加载真实 .vst3 渲染）==="
 # 通过 VST3 参数接口设参数、渲染、再分析。它证明的是"这个文件能装进 DAW 干活"。
 VST3=build/TranePlugin_artefacts/Release/VST3/Trane.vst3
 if [ -d "$VST3" ]; then
-  ./build/vst3_host_probe_artefacts/Release/vst3_host_probe "$VST3" /tmp/trane_vst3_out.wav
+  ./build/vst3_host_probe_artefacts/Release/vst3_host_probe "$VST3" "${TRANE_TEST_ARTIFACTS:-/tmp}/trane_vst3_out.wav"
 else
   echo "找不到 $VST3" >&2
   exit 1

@@ -19,6 +19,7 @@ public:
     ~TraneAudioProcessor() override = default;
 
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
+    bool isBusesLayoutSupported(const BusesLayout& layouts) const override;
     void releaseResources() override;
     void processBlock(juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
     // 必须自己实现：基类版本假定延迟为 0（还会断言 getLatencySamples()==0），
