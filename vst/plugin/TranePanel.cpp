@@ -924,6 +924,14 @@ Hit hitTest(Point<float> p, const PanelState& st) {
 
             h.kind = Hit::Kind::Control;
             h.control = (r.control < 0) ? nodeSwitchControl(r.node) : r.control;
+            if (r.control < 0) h.titleNode = r.node;
+            if (r.control >= 0 && kControls[r.control].fmt == Fmt::Choice) {
+                const float tx = col.x + geom::kBlockPadX + col.labelW + geom::kGap;
+                if (p.x >= tx && p.x <= tx + col.trackW
+                    && std::abs(p.y - r.mid) <= choiceHeight(col) * 0.5f)
+                    h.option = jlimit(0, kNumChoices - 1,
+                                      static_cast<int>((p.x - tx) * kNumChoices / col.trackW));
+            }
             // 没有开关的模块（ruin / space / out）标题行**不可点** ——
             // 给一个 -1 的 control，调用方一眼能看出"这一下没有目标"。
             return h;

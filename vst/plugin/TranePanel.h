@@ -737,10 +737,9 @@ inline constexpr int kNumControls = static_cast<int>(sizeof(kControls) / sizeof(
 //    这条**有断言**（`test_no_column_mixes_forms`）：它是面板的可读性主张，
 //    不是巧合；将来谁重排四栏，踩到它就该看到一句解释而不是一个神秘的报红。
 //
-// ---- 拖拽完全不受形态影响 ----
-// 它是纵向位移映射（`pressValue_ + dy / kDragSpan`），与控件长什么样无关 ——
-// 所以"按模块分配形态"只花了一张表 + 一支画笔，拖拽 / 手势 / 命中测试 /
-// 键盘 / 双击复位一处都没动。
+// Interaction follows the drawn shape: knobs drag vertically, bars horizontally,
+// and choices select the clicked segment. PluginEditor owns gestures/precision.
+// Rendering and interaction both use isKnob(), so their shape cannot diverge.
 //
 // 拼错一个模块名不会崩，只会**整个模块少掉旋钮**（`moduleIsKnob()` 里有守卫）——
 // 所以 `tests/test_ui_design.py` 拿探针吐出来的两张清单（模块名 + 展开后的
@@ -1056,6 +1055,7 @@ struct Hit {
 
     Kind kind = Kind::None;
     int control = -1;
+    int titleNode = -1;     // Module header, including modules without a toggle.
     int option = -1;        // TabBg: 0=关 / 1=全屏
 
     PanelState::Mark mark() const {

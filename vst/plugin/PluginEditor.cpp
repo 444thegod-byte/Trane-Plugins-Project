@@ -65,7 +65,7 @@ constexpr int kFrameHz = 30;
 constexpr float kMinScale = 0.60f;
 constexpr float kMaxScale = 1.50f;
 
-// 竖直拖的全量程像素数。Shift = 5 倍细，Cmd/Ctrl = 20 倍细。
+// Knob full-range vertical distance. Bars use their visible track width.
 constexpr float kDragSpan = 200.0f;
 constexpr float kDragFine = 5.0f;
 constexpr float kDragFinest = 20.0f;
@@ -131,6 +131,7 @@ TraneAudioProcessorEditor::TraneAudioProcessorEditor(TraneAudioProcessor& p)
     // 先把状态填成出厂值，编辑器一打开就是对的，不用等第一帧定时器。
     for (int i = 0; i < panel::controlCount(); ++i) state_.value[i] = panel::defaultNormalised(i);
     for (int n = 0; n < panel::kMaxNodes; ++n) state_.moduleActivity[n] = 1.0f;
+    syncFromHost();
     // v0.33：`mode` / `moduleCount` / `dividerX` 三个字段已删 —— 版面只有一种，
     // 分栏是编译期常量表，参数区边界是常量。出厂状态少填三样东西。
 
@@ -144,6 +145,9 @@ TraneAudioProcessorEditor::TraneAudioProcessorEditor(TraneAudioProcessor& p)
 }
 
 TraneAudioProcessorEditor::~TraneAudioProcessorEditor() {
+    if (pressControl_ >= 0)
+        if (auto* param = paramOf(pressControl_))
+            param->endChangeGesture();
     stopTimer();
     vblank_ = {};   // 先摘掉 vblank，再让成员析构 —— 回调里会碰 cache_
 }
@@ -319,7 +323,8 @@ void TraneAudioProcessorEditor::nudgeChoice(int index, int delta) {
 
     const int current = juce::jlimit(0, count - 1,
                                      juce::roundToInt(state_.value[index] * static_cast<float>(count - 1)));
-    const int next = ((current + delta) % count + count) % count;
+    const int next = juce::jlimit(0, count - 1, current + delta);
+    if (next == current) return;
     const float v = static_cast<float>(next) / static_cast<float>(count - 1);
 
     p->beginChangeGesture();
@@ -385,11 +390,17 @@ void TraneAudioProcessorEditor::applyCursor(const panel::Hit& hit) {
         // `control` 就是 -1，见下）。
         case Kind::BgBright: setMouseCursor(juce::MouseCursor::LeftRightResizeCursor); break;
         case Kind::Control:
-            // 参数行 = 上下拖（改值）；模块开关 = 单击（布尔没有"拖"）。
-            // 两种光标分开，指针自己就把"这个能拖"和"这个只能点"说清楚了。
-            setMouseCursor(hit.control >= 0 && panel::controlSlot(hit.control) < 0
-                               ? juce::MouseCursor::PointingHandCursor
-                               : juce::MouseCursor::UpDownResizeCursor);
+            if (hit.control < 0)
+                setMouseCursor(juce::MouseCursor::NormalCursor);
+            else if (panel::controlSlot(hit.control) < 0)
+                setMouseCursor(juce::MouseCursor::PointingHandCursor);
+            else if (panel::controlAt(hit.control).fmt == panel::Fmt::Choice)
+                setMouseCursor(hit.option >= 0 ? juce::MouseCursor::PointingHandCursor
+                                              : juce::MouseCursor::NormalCursor);
+            else
+                setMouseCursor(panel::isKnob(hit.control)
+                                   ? juce::MouseCursor::UpDownResizeCursor
+                                   : juce::MouseCursor::LeftRightResizeCursor);
             break;
         case Kind::TabBg:
         case Kind::BgSlot:   setMouseCursor(juce::MouseCursor::PointingHandCursor); break;
@@ -552,8 +563,11 @@ bool TraneAudioProcessorEditor::keyPressed(const juce::KeyPress& key) {
         if (state_.focus < 0) { moveFocus(delta); return true; }
         if (panel::controlAt(state_.focus).fmt == panel::Fmt::Choice)
             nudgeChoice(state_.focus, delta);
-        else
+        else if (auto* param = paramOf(state_.focus)) {
+            param->beginChangeGesture();
             setControl(state_.focus, state_.value[state_.focus] + static_cast<float>(delta) * kKeyStep);
+            param->endChangeGesture();
+        }
         repaint();
         return true;
     }
@@ -578,6 +592,8 @@ bool TraneAudioProcessorEditor::keyPressed(const juce::KeyPress& key) {
 // 鼠标
 // ============================================================================
 void TraneAudioProcessorEditor::mouseDown(const juce::MouseEvent& e) {
+    if (!e.mods.isLeftButtonDown()) return;
+    syncFromHost();
     const auto p = logical(e);
     const auto hit = panel::hitTest(p, state_);
     const auto m = hit.mark();
@@ -600,9 +616,11 @@ void TraneAudioProcessorEditor::mouseDown(const juce::MouseEvent& e) {
     pressBgSlot_ = (hit.kind == panel::Hit::Kind::BgSlot);
     dragBright_ = (hit.kind == panel::Hit::Kind::BgBright);
     dragControl_ = -1;
+    pressX_ = p.x;
     pressY_ = p.y;
+    dragLast_ = p;
     pressMoved_ = false;
-    pressValue_ = pressControl_ >= 0 ? state_.value[pressControl_] : 0.0f;
+    dragValue_ = pressControl_ >= 0 ? state_.value[pressControl_] : 0.0f;
 
     state_.press = m;
     if (pressControl_ >= 0) state_.focus = pressControl_;   // 点哪儿焦点在哪儿
@@ -624,10 +642,9 @@ void TraneAudioProcessorEditor::mouseDown(const juce::MouseEvent& e) {
 
 void TraneAudioProcessorEditor::mouseDrag(const juce::MouseEvent& e) {
     const auto p = logical(e);
+    if (p.getDistanceFrom({pressX_, pressY_}) >= kDragThreshold) pressMoved_ = true;
 
-    // v0.33：拖分割线那一段删了（分割线没了）。留下的顺序仍然有意义 ——
-    // 顶栏的横向拖动**必须**排在参数拖拽之前，否则明暗度轨道会被当成参数擦洗。
-    // 这个"先横向、再纵向"的分派顺序是 v0.31 定的，跟分割线在不在无关。
+    // Background brightness retains its own absolute-position mapping.
 
     // ---- 拖明暗度轨道 ----
     if (dragBright_) {
@@ -638,18 +655,28 @@ void TraneAudioProcessorEditor::mouseDrag(const juce::MouseEvent& e) {
 
     if (pressControl_ < 0) return;   // 模块开关 / 「选择图片」/ 空白处拖拽不做事
 
-    const float dy = pressY_ - p.y;  // 往上拖 = 变大
-    if (std::abs(dy) >= kDragThreshold) pressMoved_ = true;
     if (!pressMoved_) return;
+    if (panel::controlAt(pressControl_).fmt == panel::Fmt::Choice) return;
 
-    if (dragControl_ < 0) dragControl_ = pressControl_;
-
+    const bool knob = panel::isKnob(pressControl_);
     float span = kDragSpan;
+    if (!knob) {
+        const auto layout = panel::buildInspector(state_);
+        const int row = layout.controlRow[pressControl_];
+        if (row < 0) return;
+        span = juce::jmax(1.0f, layout.column[layout.row[row].column].trackW);
+    }
     if (e.mods.isShiftDown()) span *= kDragFine;
     if (e.mods.isCommandDown() || e.mods.isCtrlDown()) span *= kDragFinest;
 
-    // 从**按下的那个值**算绝对偏移，不是从上一帧累加 —— 累加会在快速拖动时丢事件。
-    setControl(pressControl_, pressValue_ + dy / span);
+    // Match the drawn control. Integrate pointer displacement, not event count;
+    // changing precision modifiers mid-drag must not reinterpret past movement.
+    const float delta = knob ? dragLast_.y - p.y : p.x - dragLast_.x;
+    dragLast_ = p;
+    if (delta == 0.0f) return;
+    if (dragControl_ < 0) dragControl_ = pressControl_;
+    dragValue_ = juce::jlimit(0.0f, 1.0f, dragValue_ + delta / span);
+    setControl(pressControl_, dragValue_);
 
     state_.focus = pressControl_;
     repaint();
@@ -657,6 +684,8 @@ void TraneAudioProcessorEditor::mouseDrag(const juce::MouseEvent& e) {
 
 void TraneAudioProcessorEditor::mouseUp(const juce::MouseEvent& e) {
     const auto p = logical(e);
+    if (p.getDistanceFrom({pressX_, pressY_}) >= kDragThreshold) pressMoved_ = true;
+    const auto released = panel::hitTest(p, state_);
     const bool wasDrag = dragControl_ >= 0;
 
     // 先关拖拽的手势，再做离散动作 —— nudgeChoice / resetToDefault / toggleModule
@@ -682,12 +711,32 @@ void TraneAudioProcessorEditor::mouseUp(const juce::MouseEvent& e) {
         if (v.fired && v.group == panel::BarGroup::BgWhere)
             setBackdropWhere(static_cast<panel::BgWhere>(v.option));
     } else if (!wasDrag && !pressMoved_) {
-        if (pressControl_ >= 0) {
-            // 档位参数：单击切下一档。
-            // 连续参数单击**不改值** —— 改值一律靠拖，免得手一抖就把参数碰歪。
-            if (panel::controlAt(pressControl_).fmt == panel::Fmt::Choice)
-                nudgeChoice(pressControl_, +1);
-        } else if (pressSwitch_ >= 0) {
+        if (pressControl_ >= 0 && released.control == pressControl_) {
+            if (panel::controlAt(pressControl_).fmt == panel::Fmt::Choice) {
+                if (pressHit_.option >= 0 && released.option == pressHit_.option) {
+                    if (auto* param = paramOf(pressControl_)) {
+                        param->beginChangeGesture();
+                        setControl(pressControl_, static_cast<float>(pressHit_.option) / 2.0f);
+                        param->endChangeGesture();
+                    }
+                }
+            }
+            else if (!panel::isKnob(pressControl_)) {
+                const auto layout = panel::buildInspector(state_);
+                const int row = layout.controlRow[pressControl_];
+                if (row >= 0) {
+                    const auto& col = layout.column[layout.row[row].column];
+                    const float tx = col.x + panel::geom::kBlockPadX + col.labelW + panel::geom::kGap;
+                    if (p.x >= tx && p.x <= tx + col.trackW) {
+                        if (auto* param = paramOf(pressControl_)) {
+                            param->beginChangeGesture();
+                            setControl(pressControl_, (p.x - tx) / col.trackW);
+                            param->endChangeGesture();
+                        }
+                    }
+                }
+            }
+        } else if (pressSwitch_ >= 0 && released.control == pressSwitch_) {
             // 模块标题行 = 那个模块的开关。v0.33 之前这一步只发生在**树上的圆**里，
             // 树删了之后标题行是唯一的落点 —— 所以这不是新加的功能，
             // 是**把原来的落点搬到了新的地方**，不搬的话七个开关就点不着了。
@@ -731,6 +780,7 @@ void TraneAudioProcessorEditor::mouseWheelMove(const juce::MouseEvent& e,
     // **没有**的行为（那时标题行不返回 control）。滚轮只服务参数行。
     if (hit.control < 0 || panel::controlSlot(hit.control) < 0) return;
 
+    if (w.deltaY == 0.0f) return;
     const float dir = w.deltaY > 0.0f ? 1.0f : -1.0f;
 
     if (panel::controlAt(hit.control).fmt == panel::Fmt::Choice) {
@@ -749,8 +799,8 @@ void TraneAudioProcessorEditor::mouseWheelMove(const juce::MouseEvent& e,
 }
 
 void TraneAudioProcessorEditor::mouseDoubleClick(const juce::MouseEvent& e) {
+    if (e.mods.isPopupMenu()) return;
     const auto hit = panel::hitTest(logical(e), state_);
-    if (hit.control < 0) return;
 
     // 模块标题行（= 那个模块的开关）：双击 = 把该模块的**连续参数**全部复位。
     //
@@ -760,14 +810,16 @@ void TraneAudioProcessorEditor::mouseDoubleClick(const juce::MouseEvent& e) {
     // 开关参数（BoolParam）故意不复位 —— 用户高频点击时，两次单击已经 toggle
     // 了开关（关→开→关），如果 double-click 再把开关复位到默认（false），
     // 净效果就是"开关打不开"，造成明显的可用性故障。
-    if (panel::controlSlot(hit.control) < 0) {
-        const int node = panel::controlNode(hit.control);
+    if (hit.titleNode >= 0) {
+        const int node = hit.titleNode;
         for (int i = 0; i < panel::controlCount(); ++i)
             if (panel::controlNode(i) == node)
                 if (panel::controlAt(i).fmt != panel::Fmt::None)
                     resetToDefault(i);
         return;
     }
+
+    if (hit.control < 0) return;
 
     resetToDefault(hit.control);
 }
