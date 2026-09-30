@@ -332,6 +332,27 @@ void TraneAudioProcessor::processBlockBypassed(juce::AudioBuffer<float>& buffer,
 juce::AudioProcessorEditor* TraneAudioProcessor::createEditor() {
     return new TraneAudioProcessorEditor(*this);
 }
+
+// ---------------------------------------------------------------------------
+// 背景图的持久化 —— 存在 apvts.state 的根属性上
+// ---------------------------------------------------------------------------
+// 为什么是根属性而不是另开一棵子树：`copyState()` / `replaceState()` 本来就会
+// 带上根节点的全部属性，于是保存与恢复都是白送的，不用再写一遍序列化，
+// 也不会出现"参数存了、背景没存"这种半拉子状态。
+TraneAudioProcessor::BackdropState TraneAudioProcessor::getBackdropState() const {
+    BackdropState b;
+    b.path = apvts.state.getProperty("backdropPath", juce::String{});
+    b.where = static_cast<int>(apvts.state.getProperty("backdropWhere", 0));
+    b.brightness = static_cast<float>(apvts.state.getProperty("backdropBright", 1.0f));
+    return b;
+}
+
+void TraneAudioProcessor::setBackdropState(const BackdropState& b) {
+    apvts.state.setProperty("backdropPath", b.path, nullptr);
+    apvts.state.setProperty("backdropWhere", b.where, nullptr);
+    apvts.state.setProperty("backdropBright", b.brightness, nullptr);
+}
+
 void TraneAudioProcessor::getStateInformation(juce::MemoryBlock& destData) {
     if (auto xml = apvts.copyState().createXml()) {
         copyXmlToBinary(*xml, destData);

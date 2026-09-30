@@ -9,6 +9,7 @@
 #include "../core/TraneEngine.h"
 
 #include <atomic>
+#include <cmath>
 
 namespace trane {
 
@@ -41,6 +42,29 @@ public:
 
     void getStateInformation(juce::MemoryBlock& destData) override;
     void setStateInformation(const void* data, int sizeInBytes) override;
+
+    // ------------------------------------------------------------------------
+    // 背景图的持久化
+    // ------------------------------------------------------------------------
+    //
+    // **只存路径，不存图。** 把几 MB 的图片塞进宿主工程文件会让每个实例都
+    // 膨胀几 MB，而且宿主每次保存 / 加载都要 base64 编解码一遍 —— 为了一个
+    // 装饰性的背景，代价太大。存路径的代价是"文件被移走 / 删掉就没了"，
+    // 这比塞图片诚实得多，也不会让用户在别处看到一个莫名其妙的巨大工程文件。
+    //
+    // 三个值存在 `apvts.state` 的**根属性**上 —— 于是 `copyState()` 自动带上它们，
+    // `replaceState()` 自动恢复它们，不用另开一套序列化。
+    struct BackdropState {
+        juce::String path;
+        int   where = 0;              // panel::BgWhere 的原始值
+        float brightness = 1.0f;
+        bool operator==(const BackdropState& o) const {
+            return path == o.path && where == o.where
+                && std::abs(brightness - o.brightness) < 1.0e-4f;
+        }
+    };
+    BackdropState getBackdropState() const;
+    void setBackdropState(const BackdropState&);
 
     juce::AudioProcessorValueTreeState apvts;
 
