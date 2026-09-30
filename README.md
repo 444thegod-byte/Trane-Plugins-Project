@@ -107,6 +107,13 @@ TRANE_PY=/path/to/python3 ./run_tests.sh
 
 依赖缺失时脚本会直接报出缺什么、怎么装，不会跑到一半才失败。
 
+旧 M4L 补丁的静态检查用 `python3 tools/verify_patch.py`。macOS 默认只查
+`/Applications` 与 `~/Applications` 直属的 `Ableton Live*.app`，按安装包版本选择最新的 Live；
+同版本按完整路径字典顺序选择，输出实际使用的 Max 资源目录。
+要检查指定的运行时，或在其他系统运行，设置唯一覆盖项
+`MAX_RESOURCES="/真实路径/Max.app/Contents/Resources"` 后执行同一命令。
+指定路径无效、对象清单缺失或数据库为空都会报告环境错误并退出，不会当成补丁对象缺失。
+
 > **注意**：构建的后处理步骤会把插件装到 `~/Library/Audio/Plug-Ins/{VST3,Components}/`，
 > 覆盖本机已安装的同名插件。所以在任何克隆目录里构建，都会影响你当前装着的那个。
 

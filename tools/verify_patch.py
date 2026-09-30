@@ -30,17 +30,24 @@ refpages、externals、包内抽象）建立合法对象名集合，然后逐项
 from __future__ import annotations
 
 import json
+import os
+import plistlib
 import re
 import sys
 from pathlib import Path
+from xml.parsers.expat import ExpatError
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import param_meta  # noqa: E402
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
-MAX_RESOURCES = Path(
-    "/Applications/Ableton Live 12 .app/Contents/App-Resources/Max/Max.app/Contents/Resources"
+MACOS_APPLICATION_DIRS = (Path("/Applications"), Path.home() / "Applications")
+MAX_OBJECT_LISTS = (
+    "max-objectlist.txt",
+    "audio-objectlist.txt",
+    "live-objectlist.txt",
+    "jitter-objectlist.txt",
 )
 
 # M4L 音频效果器的设备面板高度。实测 107 个真实 .amxd 的 openrect 高度全是 169.0。
@@ -55,43 +62,93 @@ NON_OBJECT_NAMES = {"p", "patcher", "poly~", "gen~", "jsui", "v8", "node.script"
 # ----------------------------------------------------------------------
 
 
+class MaxRuntimeError(RuntimeError):
+    """The Max runtime cannot provide a usable object database."""
+
+
+def resolve_max_resources() -> Path:
+    """Use MAX_RESOURCES, or the newest installed macOS Live bundle."""
+    if "MAX_RESOURCES" in os.environ:
+        configured = os.environ["MAX_RESOURCES"]
+        if not configured.strip():
+            raise MaxRuntimeError("MAX_RESOURCES 为空；请指定 Max 的 Contents/Resources 目录")
+        resources = Path(configured).expanduser()
+    else:
+        if sys.platform != "darwin":
+            raise MaxRuntimeError("此系统不自动查找 Max；请设置 MAX_RESOURCES 为真实资源目录")
+        candidates: list[tuple[tuple[int, ...], Path]] = []
+        for directory in MACOS_APPLICATION_DIRS:
+            for bundle in sorted(directory.glob("Ableton Live*.app")):
+                try:
+                    with (bundle / "Contents" / "Info.plist").open("rb") as f:
+                        info = plistlib.load(f)
+                except (OSError, plistlib.InvalidFileException, ExpatError) as exc:
+                    raise MaxRuntimeError(f"无法读取 Live 安装信息：{bundle}（{exc}）") from exc
+                if not isinstance(info, dict):
+                    raise MaxRuntimeError(f"Live 安装信息格式错误：{bundle}；请设置 MAX_RESOURCES")
+                if info.get("CFBundleIdentifier") != "com.ableton.live":
+                    continue
+                version = re.match(r"\d+(?:\.\d+)*", str(info.get("CFBundleShortVersionString", "")))
+                if version is None:
+                    raise MaxRuntimeError(f"Live 安装信息缺少有效版本：{bundle}；请设置 MAX_RESOURCES")
+                numbers = tuple(int(n) for n in version.group().split("."))
+                candidates.append((numbers + (0,) * max(0, 4 - len(numbers)), bundle))
+        if not candidates:
+            raise MaxRuntimeError("未找到已安装的 macOS Ableton Live；请设置 MAX_RESOURCES")
+        newest = max(version for version, _ in candidates)
+        # Equal versions use the first absolute bundle path in lexical order.
+        bundle = min(bundle for version, bundle in candidates if version == newest)
+        resources = bundle / "Contents" / "App-Resources" / "Max" / "Max.app" / "Contents" / "Resources"
+
+    if not resources.is_dir():
+        raise MaxRuntimeError(f"Max 资源目录不存在或不是目录：{resources}；请检查 MAX_RESOURCES")
+    missing = [name for name in MAX_OBJECT_LISTS if not (resources / "C74" / "init" / name).is_file()]
+    if missing:
+        raise MaxRuntimeError(f"Max 资源不完整：{resources}；缺少 C74/init/ 下的 {', '.join(missing)}")
+    return resources
+
+
+def _read_max_text(path: Path) -> str:
+    """Keep unreadable runtime files distinct from invalid patch objects."""
+    try:
+        return path.read_text(encoding="utf-8", errors="ignore")
+    except OSError as exc:
+        raise MaxRuntimeError(f"无法读取 Max 对象数据库文件：{path}（{exc}）") from exc
+
+
 def load_object_db() -> set[str]:
     """收集 M4L 运行时里所有合法的对象名。"""
+    resources = resolve_max_resources()
     names: set[str] = set()
-    init = MAX_RESOURCES / "C74" / "init"
+    init = resources / "C74" / "init"
 
-    for fname in (
-        "max-objectlist.txt",
-        "audio-objectlist.txt",
-        "live-objectlist.txt",
-        "jitter-objectlist.txt",
-    ):
+    for fname in MAX_OBJECT_LISTS:
         f = init / fname
-        if not f.exists():
-            continue
-        for line in f.read_text(encoding="utf-8", errors="ignore").splitlines():
+        for line in _read_max_text(f).splitlines():
             m = re.match(r'max oblist\s+"[^"]*"\s+(\S+);', line.strip())
             if m:
                 names.add(m.group(1))
 
     for f in init.glob("*-objectmappings.txt"):
-        for line in f.read_text(encoding="utf-8", errors="ignore").splitlines():
+        for line in _read_max_text(f).splitlines():
             m = re.match(r"max objectfile\s+(\S+)\s+(\S+);", line.strip())
             if m:
                 names.add(m.group(1))
                 names.add(m.group(2))
 
-    for p in (MAX_RESOURCES / "C74" / "docs" / "refpages").rglob("*.maxref.xml"):
-        m = re.search(r'<c74object name="([^"]+)"', p.read_text(encoding="utf-8", errors="ignore"))
+    for p in (resources / "C74" / "docs" / "refpages").rglob("*.maxref.xml"):
+        m = re.search(r'<c74object name="([^"]+)"', _read_max_text(p))
         if m:
             names.add(m.group(1))
 
-    for p in MAX_RESOURCES.rglob("*.mxo"):
+    for p in resources.rglob("*.mxo"):
         names.add(p.stem)
 
-    for p in MAX_RESOURCES.rglob("*.maxpat"):
+    for p in resources.rglob("*.maxpat"):
         names.add(p.stem)
 
+    if not names:
+        raise MaxRuntimeError(f"Max 对象数据库为空：{resources}；无法验证补丁对象")
     return names
 
 
@@ -698,7 +755,12 @@ def main(argv: list[str]) -> int:
         PROJECT_ROOT / "src" / "TraneGrainVoice.maxpat",
         PROJECT_ROOT / "src" / "TraneHugeVerb.maxpat",
     ]
-    report = verify(paths)
+    try:
+        print(f"Max 资源目录：{resolve_max_resources()}")
+        report = verify(paths)
+    except MaxRuntimeError as exc:
+        print(f"Max 运行时环境错误：{exc}", file=sys.stderr)
+        return 2
     total = 0
     for name, problems in report.items():
         print(f"=== {name} ===")

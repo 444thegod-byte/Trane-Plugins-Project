@@ -28,3 +28,5 @@ outputs/*/
 .DS_Store
 ._*
 __MACOSX/
+
+/artifacts/
