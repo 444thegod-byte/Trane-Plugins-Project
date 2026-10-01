@@ -6,7 +6,7 @@ if(CMAKE_HOST_APPLE AND NOT CMAKE_OSX_DEPLOYMENT_TARGET)
   set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum supported macOS version" FORCE)
 endif()
 
-project(Trane VERSION 0.36.1 LANGUAGES C CXX)
+project(Trane VERSION 0.36.2 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -161,6 +161,11 @@ if(TRANE_BUILD_PLUGIN)
     JUCE_VST3_CAN_REPLACE_VST2=0
     JUCE_STRICT_REFCOUNTEDPOINTER=1
   )
+
+  juce_add_console_app(editor_interaction_test PRODUCT_NAME "editor_interaction_test")
+  target_sources(editor_interaction_test PRIVATE tests/editor_interaction_test.cpp)
+  target_link_libraries(editor_interaction_test PRIVATE TranePlugin juce::juce_audio_utils juce::juce_dsp)
+  add_test(NAME editor_interactions COMMAND editor_interaction_test)
 
   # --------------------------------------------------------------------------
   # 4) 面板离线渲染台。
