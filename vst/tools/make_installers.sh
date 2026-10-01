@@ -2,7 +2,7 @@
 #
 # make_installers.sh —— 把构建产物打成可以双击安装的包（macOS）
 #
-# 用法：  ./tools/make_installers.sh 0.32.3
+# 用法：  ./tools/make_installers.sh 0.36.1
 #         （版本号必须和 CMakeLists.txt 里的 project(Trane VERSION ...) 一致）
 #
 # 产出到 `outputs/Trane_v<版本>_Installers/`：
@@ -12,7 +12,7 @@
 #   Trane-Standalone-v<版本>.zip
 #
 # ---------------------------------------------------------------------------
-# 为什么 pkg 一律打**用户级**（--install-location /Users/<me>）
+# User-home installation is resolved by Installer on the destination machine.
 # ---------------------------------------------------------------------------
 # `~/Library/Audio/Plug-Ins/` 与 `/Library/Audio/Plug-Ins/` **两级都会被 DAW 扫描**。
 # 两份并存时版本还不一致，是最容易被误判成「我装了新版怎么还是旧界面」的情形
@@ -22,11 +22,11 @@
 # 「打包成功」不等于「包里是刚才编的那份」。
 set -euo pipefail
 
-VER="${1:?用法: ./tools/make_installers.sh <版本号，如 0.32.3>}"
+VER="${1:?用法: ./tools/make_installers.sh <版本号，如 0.36.1>}"
 
 VST_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-ART="$VST_DIR/build/TranePlugin_artefacts/Release"
-OUT="$VST_DIR/../outputs/Trane_v${VER}_Installers"
+ART="${TRANE_BUILD_DIR:-$VST_DIR/build}/TranePlugin_artefacts/Release"
+OUT="${TRANE_INSTALLER_OUT:-$VST_DIR/../outputs/Trane_v${VER}_Installers}"
 
 VST3="$ART/VST3/Trane.vst3"
 AU="$ART/AU/Trane.component"
@@ -40,12 +40,13 @@ done
 CMVER="$(sed -n 's/^project(Trane VERSION \([0-9.]*\).*/\1/p' "$VST_DIR/CMakeLists.txt")"
 [ "$CMVER" = "$VER" ] || { echo "CMakeLists.txt 是 $CMVER，参数是 $VER —— 先改一致" >&2; exit 1; }
 
-rm -rf "$OUT"
+[ ! -e "$OUT" ] || { echo "输出目录已存在，保留原件：${OUT}。请指定新的 TRANE_INSTALLER_OUT。" >&2; exit 1; }
 mkdir -p "$OUT"
 
 # ---- pkg：payload 里放 Library/Audio/Plug-Ins/...，装到用户主目录 ----
 PAYLOAD="$(mktemp -d)"
-trap 'rm -rf "$PAYLOAD"' EXIT
+PACKAGE_STAGE="$(mktemp -d)"
+trap 'rm -rf "$PAYLOAD" "$PACKAGE_STAGE"' EXIT
 mkdir -p "$PAYLOAD/Library/Audio/Plug-Ins/VST3" "$PAYLOAD/Library/Audio/Plug-Ins/Components"
 # ditto 而不是 cp -R：保留符号链接 / 扩展属性 / 代码签名
 ditto "$VST3" "$PAYLOAD/Library/Audio/Plug-Ins/VST3/Trane.vst3"
@@ -53,13 +54,44 @@ ditto "$AU"   "$PAYLOAD/Library/Audio/Plug-Ins/Components/Trane.component"
 # .DS_Store 不进包
 find "$PAYLOAD" -name '.DS_Store' -delete
 
-PKG="$OUT/Trane-Plugins-v${VER}.pkg"
+# Keep bundle updates at their declared paths; do not search for old copies.
+COMPONENTS="$PACKAGE_STAGE/components.plist"
+pkgbuild --analyze --root "$PAYLOAD" "$COMPONENTS"
+python3 - "$COMPONENTS" <<'PY'
+import plistlib
+import sys
+from pathlib import Path
+path = Path(sys.argv[1])
+components = plistlib.loads(path.read_bytes())
+for component in components:
+    component['BundleIsRelocatable'] = False
+path.write_bytes(plistlib.dumps(components))
+PY
+COMPONENT_PKG="$PACKAGE_STAGE/Trane-Plugins.pkg"
 pkgbuild --root "$PAYLOAD" \
-         --install-location "/Users/$USER" \
-         --identifier "com.trane.plugin.v${VER//./}" \
+         --component-plist "$COMPONENTS" \
+         --install-location / \
+         --identifier "com.trane.plugin" \
          --version "$VER" \
          --ownership recommended \
-         "$PKG"
+         "$COMPONENT_PKG"
+
+# The payload is relative to the selected domain, which is restricted to the
+# installing user's home. No builder username is embedded in the package.
+DISTRIBUTION="$PACKAGE_STAGE/Distribution.xml"
+cat > "$DISTRIBUTION" <<XML
+<?xml version="1.0" encoding="utf-8"?>
+<installer-gui-script minSpecVersion="2">
+  <title>Trane ${VER}</title>
+  <options customize="never" require-scripts="false"/>
+  <domains enable_anywhere="false" enable_currentUserHome="true" enable_localSystem="false"/>
+  <choices-outline><line choice="plugins"/></choices-outline>
+  <choice id="plugins" visible="false"><pkg-ref id="com.trane.plugin"/></choice>
+  <pkg-ref id="com.trane.plugin" version="${VER}">Trane-Plugins.pkg</pkg-ref>
+</installer-gui-script>
+XML
+PKG="$OUT/Trane-Plugins-v${VER}.pkg"
+productbuild --distribution "$DISTRIBUTION" --package-path "$PACKAGE_STAGE" "$PKG"
 
 # ---- zip：手动拖拽用 ----
 ( cd "$(dirname "$VST3")" && zip -qry "$OUT/Trane-VST3-v${VER}.zip" "Trane.vst3" )
@@ -69,13 +101,27 @@ pkgbuild --root "$PAYLOAD" \
 # ---- 校验：包里的二进制必须和刚编出来的一模一样 ----
 echo "=== 校验 pkg 内容 ==="
 CHK="$(mktemp -d)"
-trap 'rm -rf "$PAYLOAD" "$CHK"' EXIT
-pkgutil --expand "$PKG" "$CHK/x" >/dev/null
-( cd "$CHK/x" && cat Payload | gunzip -dc | cpio -i --quiet 2>/dev/null )
+trap 'rm -rf "$PAYLOAD" "$PACKAGE_STAGE" "$CHK"' EXIT
+pkgutil --expand-full "$PKG" "$CHK/x" >/dev/null
+
+python3 - "$CHK/x" <<'PY'
+import sys
+import xml.etree.ElementTree as ET
+from pathlib import Path
+expanded = Path(sys.argv[1])
+domains = ET.parse(expanded / 'Distribution').find('domains')
+assert domains is not None and domains.attrib == {
+    'enable_anywhere': 'false', 'enable_currentUserHome': 'true',
+    'enable_localSystem': 'false'}, 'Package must install only into the current user home'
+info = ET.parse(expanded / 'Trane-Plugins.pkg' / 'PackageInfo').getroot()
+assert info.get('install-location') == '/', 'Payload must be relative to the home domain'
+assert info.get('identifier') == 'com.trane.plugin', 'Receipt identifier must remain stable across versions'
+PY
+installer -dominfo -pkg "$PKG" | grep -q '^CurrentUserHomeDirectory$'
 
 fail=0
 for pair in "VST3/Trane.vst3:VST3/Trane.vst3" "AU/Trane.component:Components/Trane.component"; do
-  src="$ART/${pair%%:*}"; dst="$CHK/x/Library/Audio/Plug-Ins/${pair##*:}"
+  src="$ART/${pair%%:*}"; dst="$CHK/x/Trane-Plugins.pkg/Payload/Library/Audio/Plug-Ins/${pair##*:}"
   bin_src="$(find "$src" -type f -perm +111 -name Trane | head -1)"
   bin_dst="$(find "$dst" -type f -perm +111 -name Trane | head -1)"
   a="$(shasum -a 256 "$bin_src" | cut -d' ' -f1)"

@@ -84,7 +84,21 @@ void TraneEngine::processBypassed(const float* const* in, float* const* out, int
 }
 
 void TraneEngine::process(const float* const* in, float* const* out, int numSamples) {
-    if (numSamples <= 0) return;
+    if (numSamples <= 0 || scratchL_.empty()) return;
+
+    // Hosts may send more samples than the block size supplied during prepare.
+    // Split using existing storage so the audio thread never reallocates.
+    const int capacity = static_cast<int>(scratchL_.size());
+    for (int offset = 0; offset < numSamples;) {
+        const int count = std::min(capacity, numSamples - offset);
+        const float* chunkIn[2] = {in[0] + offset, in[1] + offset};
+        float* chunkOut[2] = {out[0] + offset, out[1] + offset};
+        processChunk(chunkIn, chunkOut, count);
+        offset += count;
+    }
+}
+
+void TraneEngine::processChunk(const float* const* in, float* const* out, int numSamples) {
 
     float* srcL = scratchL_.data();
     float* srcR = scratchR_.data();
