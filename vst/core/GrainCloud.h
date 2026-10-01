@@ -20,9 +20,9 @@ namespace trane {
 struct GrainParams {
     float sizeMs = 100.0f;        // 粒子长度
     float density = 8.0f;         // 每秒粒子数
-    float position = 0.0f;        // 在读取区间里的位置 0..1（1 = 最新）
+    float position = 0.0f;        // Reference-range position 0..1; the end is not necessarily the newest sample.
     float spray = 0.1f;           // 位置随机量 0..1
-    float rate = 1.0f;            // 播放速率（同时决定音高与时长）
+    float rate = 1.0f;            // Source read rate/pitch; output lifetime remains sizeMs.
     float rateSpread = 0.0f;      // 每个粒子的音高随机量 0..1
     float panSpread = 0.0f;       // 每个粒子的声场随机量 0..1
     float reverseProb = 0.0f;     // 反向播放概率 0..1

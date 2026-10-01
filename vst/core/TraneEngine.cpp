@@ -107,7 +107,8 @@ void TraneEngine::processChunk(const float* const* in, float* const* out, int nu
     // 1) 冻结：输出干声，或输出被钉住的无限循环
     freeze_.process(in, src, numSamples);
 
-    // 2) 粒子云的取材区间：冻结时限定在冻结窗口内，否则取最近的若干秒
+    // 2) Grain start-position reference: frozen loop or recent live history.
+    // GrainCloud does not constrain playback to this range; reads wrap at capture capacity.
     if (freeze_.isFrozen() && freeze_.loopLengthSamples() > 1) {
         grain_.setReadRange(freeze_.loopStartIndex(), freeze_.loopLengthSamples());
     } else {
