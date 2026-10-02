@@ -3,7 +3,7 @@
 > 用于实验电子音乐制作与现场演出的**实时解构效果器**。
 > 硬边切片、磁带停转、谐振染色、波形折叠。
 
-**当前版本：v0.36** ｜ 格式：VST3 + AU + Standalone ｜ 通用二进制（`arm64` + `x86_64`）
+**当前版本：v0.36.2** ｜ 格式：VST3 + AU + Standalone ｜ 通用二进制（`arm64` + `x86_64`）
 
 > **📖 使用说明（面向使用者）见 [`docs/使用说明.md`](docs/使用说明.md)** ——
 > 安装、界面导读、操作方式、十个模块逐个详解、实用配方、排错、参数速查表。
@@ -80,9 +80,9 @@ Max/MSP 依赖 iLok + Java，**无法在自动化环境启动**，只能静态�
 
 ### 环境要求
 
-- macOS + Xcode 命令行工具（`xcode-select --install`）
+- macOS + Xcode 命令行工具（`xcode-select --install`）；插件最低系统版本默认固定为 macOS 11
 - CMake ≥ 3.22、Ninja
-- Python 3，且装了 `numpy` 与 `soundfile`
+- Python 3，且装了 `pytest`、`numpy`、`soundfile`、`fonttools` 与 `pillow`
 
 ### 步骤
 
@@ -114,12 +114,13 @@ TRANE_PY=/path/to/python3 ./run_tests.sh
 `MAX_RESOURCES="/真实路径/Max.app/Contents/Resources"` 后执行同一命令。
 指定路径无效、对象清单缺失或数据库为空都会报告环境错误并退出，不会当成补丁对象缺失。
 
-> **注意**：构建的后处理步骤会把插件装到 `~/Library/Audio/Plug-Ins/{VST3,Components}/`，
-> 覆盖本机已安装的同名插件。所以在任何克隆目录里构建，都会影响你当前装着的那个。
+构建默认只生成产物。验证通过后，将 `build/TranePlugin_artefacts/Release/VST3/Trane.vst3`
+复制到 `~/Library/Audio/Plug-Ins/VST3/` 即可安装；已有同名插件时先留好旧版。
+需要保留自动安装行为时，配置 CMake 加 `-DTRANE_COPY_PLUGIN_AFTER_BUILD=ON`。
 
 ### 验收门槛
 
-**构建 → pytest 127 项 → 面板像素检查 → 六组反向对照 → 端到端验收**，必须全过。
+**构建 → CTest（含可变音频块回归）→ pytest → 面板像素检查 → 六组反向对照 → 端到端验收**，必须全过。
 
 `run_tests.sh` 用 `set -euo pipefail`：任何一步失败就停在那里，
 所以"跑到最后一行"本身就说明前面每一段都过了。
@@ -132,15 +133,21 @@ TRANE_PY=/path/to/python3 ./run_tests.sh
 `.vst3` 真的当插件加载起来、通过 VST3 参数接口设参数、渲染音频、再分析结果。
 它证明的是"**这个文件能装进 DAW 干活**"，而不只是"算法写对了"。
 
-产物安装到 `~/Library/Audio/Plug-Ins/{VST3,Components}/`。
 打安装包用 `./tools/make_installers.sh <版本号>`（版本号必须与 `CMakeLists.txt` 一致，
-脚本会自己校验）。
+脚本会自己校验）。pkg 限定安装到使用者自己的主目录；安装位置和包内二进制哈希都经过检查。
 
 ---
 
 ## 四、几个不显然但重要的实现约定
 
 这些都是踩过坑之后定下来的，改之前先看 `.workbuddy-ai/memory/MEMORY.md`。
+
+v0.36.1 修复了宿主送入超大音频块时的缓冲越界，并限定双声道输入/输出。
+安装包现在由 macOS 在安装时解析当前用户主目录；缺 JUCE 时要求构建插件会直接报错。
+构建固定最低系统版本为 macOS 11，避免新版 Xcode 把插件限制为只能在构建机的新系统上加载。
+
+v0.36.2 让横条支持左右拖动和点击轨道选值，旋钮保持上下拖动。
+LP / BP / HP 可直接点选；精调倍率切换、开关误拖和宿主自动化手势也已修正。
 
 ### 1. 停转必须同时停住写头
 

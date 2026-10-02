@@ -226,13 +226,22 @@ void TraneAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBlock) 
 
 void TraneAudioProcessor::releaseResources() {}
 
+bool TraneAudioProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const {
+    return layouts.getMainInputChannelSet() == juce::AudioChannelSet::stereo()
+        && layouts.getMainOutputChannelSet() == juce::AudioChannelSet::stereo();
+}
+
 void TraneAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
                                        juce::MidiBuffer& /*midi*/) {
     juce::ScopedNoDenormals noDenormals;
 
     const int n = buffer.getNumSamples();
     const int nch = buffer.getNumChannels();
-    if (n <= 0 || nch <= 0) return;
+    if (n <= 0) return;
+    if (nch != 2) {
+        buffer.clear();
+        return;
+    }
 
     TraneParams p;
     p.freeze = getBool(apvts, ParamIDs::freeze);
@@ -299,8 +308,7 @@ void TraneAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
 
     engine_.setParams(p);
 
-    float* ch[2] = {buffer.getWritePointer(0), nullptr};
-    ch[1] = (nch > 1) ? buffer.getWritePointer(1) : ch[0];
+    float* ch[2] = {buffer.getWritePointer(0), buffer.getWritePointer(1)};
     const float* cin[2] = {ch[0], ch[1]};
     engine_.process(cin, ch, n);
 
@@ -321,10 +329,13 @@ void TraneAudioProcessor::processBlockBypassed(juce::AudioBuffer<float>& buffer,
 
     const int n = buffer.getNumSamples();
     const int nch = buffer.getNumChannels();
-    if (n <= 0 || nch <= 0) return;
+    if (n <= 0) return;
+    if (nch != 2) {
+        buffer.clear();
+        return;
+    }
 
-    float* ch[2] = {buffer.getWritePointer(0), nullptr};
-    ch[1] = (nch > 1) ? buffer.getWritePointer(1) : ch[0];
+    float* ch[2] = {buffer.getWritePointer(0), buffer.getWritePointer(1)};
     const float* cin[2] = {ch[0], ch[1]};
     engine_.processBypassed(cin, ch, n);
 }

@@ -1,5 +1,12 @@
 cmake_minimum_required(VERSION 3.22)
-project(Trane VERSION 0.36 LANGUAGES C CXX)
+
+# Keep the minimum OS independent of the builder's installed Xcode SDK.
+# macOS 11 supports both architectures in the universal plug-in.
+if(CMAKE_HOST_APPLE AND NOT CMAKE_OSX_DEPLOYMENT_TARGET)
+  set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum supported macOS version" FORCE)
+endif()
+
+project(Trane VERSION 0.36.2 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -49,13 +56,21 @@ enable_testing()
 add_test(NAME freeze_probe_runs COMMAND freeze_probe --out ${CMAKE_CURRENT_BINARY_DIR}/probe_out.wav)
 add_test(NAME reverb_probe_runs COMMAND reverb_probe --seconds 5 --out ${CMAKE_CURRENT_BINARY_DIR}/verb_out.wav)
 
+add_executable(engine_block_test tests/engine_block_test.cpp)
+target_link_libraries(engine_block_test PRIVATE trane_core)
+add_test(NAME engine_block_sizes COMMAND engine_block_test)
+
 # ============================================================================
 # 3) JUCE 插件外壳（VST3 + AU + 独立程序）
 #    独立程序版本很有用：不用开 DAW 就能听。
 # ============================================================================
 option(TRANE_BUILD_PLUGIN "构建 JUCE 插件外壳" ON)
+option(TRANE_COPY_PLUGIN_AFTER_BUILD "构建后安装插件到本机" OFF)
 
-if(TRANE_BUILD_PLUGIN AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/external/JUCE/CMakeLists.txt)
+if(TRANE_BUILD_PLUGIN)
+  if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/external/JUCE/CMakeLists.txt)
+    message(FATAL_ERROR "JUCE is missing. Run vst/setup_juce.sh, or configure with -DTRANE_BUILD_PLUGIN=OFF for DSP-only builds.")
+  endif()
   add_subdirectory(external/JUCE)
 
   # --------------------------------------------------------------------------
@@ -121,7 +136,7 @@ if(TRANE_BUILD_PLUGIN AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/external/JUCE/CMake
     NEEDS_MIDI_OUTPUT         FALSE
     IS_MIDI_EFFECT            FALSE
     EDITOR_WANTS_KEYBOARD_FOCUS FALSE
-    COPY_PLUGIN_AFTER_BUILD   TRUE
+    COPY_PLUGIN_AFTER_BUILD   ${TRANE_COPY_PLUGIN_AFTER_BUILD}
     VST3_CATEGORIES           "Fx"
     AU_MAIN_TYPE              kAudioUnitType_Effect
   )
@@ -146,6 +161,11 @@ if(TRANE_BUILD_PLUGIN AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/external/JUCE/CMake
     JUCE_VST3_CAN_REPLACE_VST2=0
     JUCE_STRICT_REFCOUNTEDPOINTER=1
   )
+
+  juce_add_console_app(editor_interaction_test PRODUCT_NAME "editor_interaction_test")
+  target_sources(editor_interaction_test PRIVATE tests/editor_interaction_test.cpp)
+  target_link_libraries(editor_interaction_test PRIVATE TranePlugin juce::juce_audio_utils juce::juce_dsp)
+  add_test(NAME editor_interactions COMMAND editor_interaction_test)
 
   # --------------------------------------------------------------------------
   # 4) 面板离线渲染台。

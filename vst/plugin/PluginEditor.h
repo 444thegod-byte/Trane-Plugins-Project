@@ -1,74 +1,10 @@
-// PluginEditor.h — Träne 的编辑器（v0.30：左世界树 + 右参数检查器）
-//
-// ============================================================================
-// 这一层刻意做得很薄
-// ============================================================================
-//
-// 所有绘制与几何都在 `TranePanel` 里（那一层不依赖 juce_audio_processors，
-// 因此可以离线渲染成 PNG 做机器验证）。编辑器只做四件事：
-//
-//   1) 把鼠标 / 键盘事件翻译成面板的命中测试，再把结果写进 APVTS；
-//   2) 每 1/30 秒把 APVTS 与音频线程的遥测抄进 PanelState，然后重绘
-//      （节奏由显示器的 vblank 驱动，不是定时器 —— 见下面 `vblank_`）；
-//   3) 管住窗口尺寸（**锁定 1440:720 = 2:1**）；
-//   4) 维护交互四态里的三个（hover / press / focus）。
-//
-// 一个子控件都没有。48 个 Slider/Label 表达不了"一棵会呼吸的树"这种东西，
-// 硬套只会两边都别扭。
-//
-// ============================================================================
-// 交互（全部在这里定死，别处不要另立一套）
-// ============================================================================
-//
-//   **顶栏**    左边 ALL / MODULE 切模式；右边 1 / 2 / 3 / 4 切 MODULE 模式的列数
-//               （ALL 模式下禁用 —— Apple 的禁用控件是"摊平"的，不是"变暗的"）。
-//
-//   **分割线**  按住左右拖，范围 300–560。拖动时参数区跟着走：列宽、行距、
-//               字号全部重算（`buildInspector` 是**算出来的**，不是常量表）。
-//
-//   **参数行**  竖直拖 = 改值，全量程 200 逻辑像素。**Shift = 5 倍细**，
-//               **Cmd/Ctrl = 20 倍细**。单击档位参数切下一档；双击复位到出厂值。
-//               滚轮 = ±1/200 量程（Shift 时 ±1/1000）。
-//
-//   **模块标题行 / 树上的圆心**  两者是**同一个东西** —— 这个模块的开关。
-//               单击切换，双击复位这个模块的全部参数。
-//
-//   **树上的圆环**  只做指针反馈（悬停提亮圆边框，并同时点亮检查器里
-//               对应的标题行，于是"左边那个圆是哪个模块"不用猜）。
-//               它**没有单击动作** —— 树上十个圆是**显示**，检查器才是操作面。
-//
-//   **键盘**    Tab / Shift+Tab / ↑ / ↓ 在参数行之间移动焦点（只走**当前真的
-//               显示出来**的行）；← / → 微调（连续参数 ±1/100 量程，档位参数换档）；
-//               回车 = 切换焦点所在模块的开关；Esc = 取消焦点。
-//               焦点态是**唯一**允许出现强调色 #0A84FF 的地方（Apple 的
-//               keyboardFocusIndicator）。
-//
-//               **空格故意不绑。** Ableton 里空格是播放 / 停止，插件去抢宿主
-//               最常用的那个键，用户每按一次都会骂人。回车的语义同样清楚，
-//               而且宿主很少占用它。
-//
-//   **背景图**  顶栏中段那一组三件（v0.31 新增）：
-//               ① 「选择图片」格 —— 点一下开系统文件对话框，读进来的图塞进
-//                  `state_.backdrop.image`。**读文件是这一层的职责**：面板层
-//                  只吃一个 juce::Image，绝不碰 I/O（离线可验证性靠这条活着，
-//                  tests/test_editor_layout.py 有断言盯着）。
-//               ② [关][树][参数] —— 背景垫在哪儿。关 = 不画（图还留着）。
-//               ③ 明暗度轨道 —— 沿轨道拖，位置**直接**映射成倍率
-//                  （`panel::trackToBright`，几何级数）。不是相对拖拽：
-//                  轨道是可见的，点哪儿就该是哪儿的亮度。
-//
-// 所有离散动作都放在**松手**时执行，不在按下时执行 —— 但**不是**因为
-// "双击的第二个 mouseUp 会被抑制掉"，那是错的。读 juce_Component.cpp:2599-2604
-// 可以看到 `internalMouseUp` 是先调 `mouseUp` 再调 `mouseDoubleClick`，
-// 一次双击送来的是「松手1 → 松手2 → 双击」三个事件。
-//
-// 所以真正成立的是另一条：**单击动作自己满足"做两遍等于没做"** ——
-// 开关 关→开→复位(默认关) = 关，档位 走两档再复位回 LP，连续参数单击本来就不改值，
-// 明暗度轨道是**绝对位置**映射（同一个 x 点两次结果相同）。
-// 代价是双击时中间闪一下，换来的是每次点开关都是零延迟。
-//
-// 唯一不满足这条的是「选择图片」——开两次系统对话框显然不是"等于没做"。
-// 所以它带一个 `choosing_` 闸：对话框还开着就不再开第二个。
+// PluginEditor.h — JUCE editor and input handling.
+// Rendering/geometry live in TranePanel; this layer writes host parameters.
+// Bars drag horizontally or accept track clicks. Knobs drag vertically.
+// Choices select their clicked segment. Shift is 5x finer, Cmd/Ctrl is 20x finer.
+// Double-click resets a parameter or a module's non-switch parameters.
+// Tab/up/down select parameters; left/right edit; Return toggles the module.
+// Space remains available to the DAW transport.
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
@@ -175,8 +111,10 @@ private:
     // 开关是布尔（只有单击）。所以按下时把它挑出来存这儿，`pressControl_`
     // 让开。判据是 `controlSlot < 0` —— 控制表里对"开关"的既有定义。
     int pressSwitch_ = -1;
-    float pressValue_ = 0.0f;    // 按下那一刻的值，拖拽从它算绝对偏移
+    float pressX_ = 0.0f;
     float pressY_ = 0.0f;
+    juce::Point<float> dragLast_;
+    float dragValue_ = 0.0f;
     bool pressMoved_ = false;    // 越过拖拽阈值 —— 松手时不再当单击处理
 
     // v0.33 删掉了 `dragDivider_` / `dividerGrab_`（分割线拖拽）。
