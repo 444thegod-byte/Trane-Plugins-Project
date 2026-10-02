@@ -107,6 +107,13 @@ TRANE_PY=/path/to/python3 ./run_tests.sh
 
 依赖缺失时脚本会直接报出缺什么、怎么装，不会跑到一半才失败。
 
+旧 M4L 补丁的静态检查在仓库根目录运行 `python3 tools/verify_patch.py`。macOS 默认只查
+`/Applications` 与 `~/Applications` 直属的 `Ableton Live*.app`，按安装包版本选择最新的 Live；
+同版本按完整路径字典顺序选择，输出实际使用的 Max 资源目录。
+要检查指定的运行时，或在其他系统运行，设置唯一覆盖项
+`MAX_RESOURCES="/真实路径/Max.app/Contents/Resources"` 后执行同一命令。
+指定路径无效、对象清单缺失或数据库为空都会报告环境错误并退出，不会当成补丁对象缺失。
+
 构建默认只生成产物。验证通过后，将 `build/TranePlugin_artefacts/Release/VST3/Trane.vst3`
 复制到 `~/Library/Audio/Plug-Ins/VST3/` 即可安装；已有同名插件时先留好旧版。
 需要保留自动安装行为时，配置 CMake 加 `-DTRANE_COPY_PLUGIN_AFTER_BUILD=ON`。
